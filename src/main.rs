@@ -1,4 +1,6 @@
 mod engine;
+use std::borrow::Borrow;
+
 use engine::Value;
 use graphviz_rust::cmd::{CommandArg, Format};
 use graphviz_rust::dot_generator::*;
@@ -20,11 +22,14 @@ fn main() {
 
     let f = Value::init(-2.0, "f".to_string());
 
-    let mut L = d * f;
+    let mut l = d * f;
 
-    L.label = "L".to_string();
+    l.label = "L".to_string();
+    l.grad = 1.0;
 
-    draw_dot(&L);
+    l.clone().backwards();
+
+    draw_dot(&l);
 }
 
 fn trace(root: &Value) -> (Vec<Value>, Vec<(Value, Value)>) {
@@ -41,20 +46,23 @@ fn build(v: &Value, nodes: &mut Vec<Value>, edges: &mut Vec<(Value, Value)>) {
         nodes.push(v.clone());
     }
     for child in v.prev.iter() {
-        edges.push((child.clone(), v.clone()));
+        edges.push((child.borrow_mut().clone(), v.clone()));
 
-        build(child, nodes, edges);
+        build(&child.borrow_mut().clone(), nodes, edges);
     }
 }
 
 fn draw_dot(root: &Value) {
     let (nodes, edges) = (trace(root).0, trace(root).1);
 
-    let mut dot: Graph = graph!(strict di id!("micro"); attr!("rankdir", "LR"));
+    let mut dot: Graph =
+        graph!(strict di id!("micro"); attr!("rankdir", "LR"), attr!("fontcolor", "red"));
 
     for n in nodes.iter() {
         let uid: Id = id!(n.label);
-        let text: String = String::from(n.label.to_string() + "|" + &n.data.to_string());
+        let text: String = String::from(
+            n.label.to_string() + "|" + &n.data.to_string() + "|" + &n.grad.to_string(),
+        );
         dot.add_stmt(stmt!(
             node!(uid;  attr!("label",esc &text), attr!("shape", "record"))
         ));
