@@ -55,7 +55,7 @@
 <polyline fill="none" stroke="black" points="180,-178.5 234,-178.5"/>
 <text text-anchor="middle" x="207" y="-163.3" font-family="Times,serif" font-size="14.00">&#45;1</text>
 <polyline fill="none" stroke="black" points="180,-155.5 234,-155.5"/>
-<text text-anchor="middle" x="207" y="-140.3" font-family="Times,serif" font-size="14.00">0</text>
+<text text-anchor="middle" x="207" y="-140.3" font-family="Times,serif" font-size="14.00">&#45;2</text>
 </g>
 <!-- d+ -->
 <g id="node5" class="node">
@@ -83,7 +83,7 @@
 <polyline fill="none" stroke="black" points="0,-222.5 54,-222.5"/>
 <text text-anchor="middle" x="27" y="-207.3" font-family="Times,serif" font-size="14.00">2</text>
 <polyline fill="none" stroke="black" points="0,-199.5 54,-199.5"/>
-<text text-anchor="middle" x="27" y="-184.3" font-family="Times,serif" font-size="14.00">0</text>
+<text text-anchor="middle" x="27" y="-184.3" font-family="Times,serif" font-size="14.00">6</text>
 </g>
 <!-- e* -->
 <g id="node7" class="node">
@@ -111,7 +111,7 @@
 <polyline fill="none" stroke="black" points="0,-134.5 54,-134.5"/>
 <text text-anchor="middle" x="27" y="-119.3" font-family="Times,serif" font-size="14.00">&#45;3</text>
 <polyline fill="none" stroke="black" points="0,-111.5 54,-111.5"/>
-<text text-anchor="middle" x="27" y="-96.3" font-family="Times,serif" font-size="14.00">0</text>
+<text text-anchor="middle" x="27" y="-96.3" font-family="Times,serif" font-size="14.00">&#45;4</text>
 </g>
 <!-- b&#45;&gt;e* -->
 <g id="edge5" class="edge">
@@ -127,7 +127,7 @@
 <polyline fill="none" stroke="black" points="180,-90.5 234,-90.5"/>
 <text text-anchor="middle" x="207" y="-75.3" font-family="Times,serif" font-size="14.00">10</text>
 <polyline fill="none" stroke="black" points="180,-67.5 234,-67.5"/>
-<text text-anchor="middle" x="207" y="-52.3" font-family="Times,serif" font-size="14.00">0</text>
+<text text-anchor="middle" x="207" y="-52.3" font-family="Times,serif" font-size="14.00">&#45;2</text>
 </g>
 <!-- c&#45;&gt;d+ -->
 <g id="edge6" class="edge">

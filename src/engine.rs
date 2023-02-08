@@ -1,13 +1,14 @@
 use core::fmt;
 use dyn_clonable::*;
+use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::ops::{Add, Mul};
 use std::rc::Rc;
 
-#[clonable]
-trait MyTrait: Clone {
-    fn clone(&self);
-}
+use graphviz_rust::cmd::{CommandArg, Format};
+use graphviz_rust::dot_generator::*;
+use graphviz_rust::dot_structures::*;
+use graphviz_rust::exec;
+use graphviz_rust::printer::PrinterContext;
 
 #[derive(Clone)]
 pub struct Value {
@@ -18,39 +19,9 @@ pub struct Value {
     pub grad: f64,
 }
 
-impl Value {
-    pub fn init(data: f64, label: String) -> Self {
-        Self {
-            data,
-            prev: Vec::new(),
-            op: "".to_string(),
-            label,
-            grad: 0.0,
-        }
-    }
-
-    pub fn back(self) {
-        if self.prev.len() != 0 {
-            let mut this = self.prev[0].borrow_mut();
-            let mut other = self.prev[1].borrow_mut();
-            match self.op.as_str() {
-                "+" => {
-                    println!("Printing add");
-                    println!("{:?}", self.grad);
-                    this.grad += 1.0 * self.grad;
-                    other.grad += 1.0 * self.grad;
-                }
-                "*" => {
-                    println!("Printing multiply");
-                    println!("{:?}", self.grad);
-                    this.grad += other.data * self.grad;
-                    other.grad += this.data * self.grad;
-                }
-                "" => {}
-                _ => {}
-            }
-        }
-    }
+#[derive(Debug)]
+pub struct NNode {
+    pub root: Rc<RefCell<Value>>,
 }
 
 impl PartialEq for Value {
@@ -69,16 +40,24 @@ impl fmt::Debug for Value {
     }
 }
 
-impl Add for Value {
-    type Output = Self;
+impl Value {
+    pub fn init(data: f64, label: String) -> Self {
+        Self {
+            data,
+            prev: Vec::new(),
+            op: "".to_string(),
+            label,
+            grad: 0.0,
+        }
+    }
 
-    fn add(self, other: Self) -> Self {
-        let this = Rc::new(RefCell::new(self));
-        let other = Rc::new(RefCell::new(other));
-
+    pub fn add(&self, other: &Self) -> Self {
         let out: Value = Value {
-            data: this.borrow_mut().data + other.borrow_mut().data,
-            prev: Vec::from([Rc::clone(&this), Rc::clone(&other)]),
+            data: self.data + other.data,
+            prev: Vec::from([
+                Rc::new(RefCell::new(self.clone())),
+                Rc::new(RefCell::new(other.clone())),
+            ]),
             op: "+".to_string(),
             label: "".to_string(),
             grad: 0.0,
@@ -86,18 +65,14 @@ impl Add for Value {
 
         out
     }
-}
 
-impl Mul for Value {
-    type Output = Self;
-
-    fn mul(self, other: Self) -> Self {
-        let this = Rc::new(RefCell::new(self));
-        let other = Rc::new(RefCell::new(other));
-
+    pub fn mul(&self, other: &Self) -> Self {
         let out: Value = Value {
-            data: this.borrow_mut().data + other.borrow_mut().data,
-            prev: Vec::from([Rc::clone(&this), Rc::clone(&other)]),
+            data: self.data + other.data,
+            prev: Vec::from([
+                Rc::new(RefCell::new(self.clone())),
+                Rc::new(RefCell::new(other.clone())),
+            ]),
             op: "*".to_string(),
             label: "".to_string(),
             grad: 0.0,
@@ -107,29 +82,131 @@ impl Mul for Value {
     }
 }
 
-impl Value {
-    fn build_topo(&self, topo: &mut Vec<Value>, visited: &mut Vec<Value>, v: Rc<RefCell<Value>>) {
-        let val = v.borrow_mut();
-        if !visited.contains(&val) {
-            visited.push(val.clone());
-            for child in val.prev.iter() {
-                self.build_topo(topo, visited, child.clone());
+pub fn back(root: Rc<RefCell<Value>>) {
+    let bind = root.borrow_mut();
+    let l = bind.prev.len();
+    let op = &bind.op;
+    let grad = bind.grad;
+    if l != 0 {
+        let item1 = &mut bind.prev[0].borrow_mut();
+        let item2 = &mut bind.prev[1].borrow_mut();
+        match op.as_str() {
+            "+" => {
+                println!("Printing add");
+                println!("{:?}", grad);
+                item1.grad += 1.0 * grad;
+                item2.grad += 1.0 * grad;
             }
-            topo.push(val.clone());
+            "*" => {
+                println!("Printing multiply");
+                println!("{:?}", grad);
+                item1.grad += item2.data * grad;
+                item2.grad += item1.data * grad;
+            }
+            "" => {}
+            _ => {}
+        }
+    }
+}
+
+fn trace(
+    root: Rc<RefCell<Value>>,
+) -> (
+    Vec<Rc<RefCell<Value>>>,
+    Vec<(Rc<RefCell<Value>>, Rc<RefCell<Value>>)>,
+) {
+    let mut nodes: Vec<Rc<RefCell<Value>>> = Vec::new();
+    let mut edges: Vec<(Rc<RefCell<Value>>, Rc<RefCell<Value>>)> = Vec::new();
+
+    build(root, &mut nodes, &mut edges);
+
+    (nodes, edges)
+}
+
+fn build(
+    v: Rc<RefCell<Value>>,
+    nodes: &mut Vec<Rc<RefCell<Value>>>,
+    edges: &mut Vec<(Rc<RefCell<Value>>, Rc<RefCell<Value>>)>,
+) {
+    let val = Rc::clone(&v);
+    if !nodes.contains(&v) {
+        nodes.push(Rc::clone(&v));
+    }
+    for child in v.as_ref().borrow().prev.iter() {
+        edges.push((Rc::clone(&child), Rc::clone(&v)));
+        build(Rc::clone(&child), nodes, edges);
+    }
+}
+
+impl NNode {
+    pub fn visualise(&self) {
+        let root = &self.clone().root;
+        let (nodes, edges) = (trace(root.clone()).0, trace(root.clone()).1);
+
+        let mut dot: Graph =
+            graph!(strict di id!("micro"); attr!("rankdir", "LR"), attr!("fontcolor", "red"));
+
+        for item in nodes.iter() {
+            let n = item.as_ref().borrow();
+            let uid: Id = id!(n.label);
+            let text: String = String::from(
+                n.label.to_string() + "|" + &n.data.to_string() + "|" + &n.grad.to_string(),
+            );
+            dot.add_stmt(stmt!(
+                node!(uid;  attr!("label",esc &text), attr!("shape", "record"))
+            ));
+
+            if n.op != "".to_string() {
+                let temp_uid: Id = id!(n.label.to_string() + &n.op.to_string());
+                dot.add_stmt(stmt!(node!(esc temp_uid;attr!("label",esc n.op))));
+                dot.add_stmt(stmt!(edge!(node_id!(esc temp_uid) => node_id!(esc uid))))
+            }
+
+            for (val1, val2) in edges.iter() {
+                let n1 = val1.as_ref().borrow();
+                let n2 = val2.as_ref().borrow();
+                dot.add_stmt(stmt!(edge!(node_id!(esc n1.label.to_string()) => node_id!(esc n2.label.to_string() + &n2.op.to_string()))));
+            }
+        }
+
+        let mut ctx = PrinterContext::default();
+        let empty = exec(
+            dot,
+            &mut ctx,
+            vec![
+                CommandArg::Format(Format::Svg),
+                CommandArg::Output("output.svg".to_string()),
+            ],
+        );
+    }
+
+    fn build_topo(
+        &self,
+        topo: &mut Vec<Rc<RefCell<Value>>>,
+        visited: &mut Vec<Rc<RefCell<Value>>>,
+        v: Rc<RefCell<Value>>,
+    ) {
+        let val = Rc::clone(&v);
+        if !visited.contains(&val) {
+            visited.push(Rc::clone(&v));
+            for child in val.as_ref().borrow().prev.iter() {
+                self.build_topo(topo, visited, Rc::clone(&child));
+            }
+            topo.push(val);
         }
     }
 
-    pub fn backwards(self) {
-        let obj = Rc::new(RefCell::new(self.clone()));
-        let mut topo: Vec<Value> = Vec::new();
-        let mut visited: Vec<Value> = Vec::new();
+    pub fn backwards(&self) {
+        let obj = Rc::clone(&self.root);
+        let mut topo: Vec<Rc<RefCell<Value>>> = Vec::new();
+        let mut visited: Vec<Rc<RefCell<Value>>> = Vec::new();
 
         self.build_topo(&mut topo, &mut visited, obj);
 
         topo.reverse();
 
         for v in topo {
-            v.back();
+            back(v);
         }
 
         // println!("{:?}", &topo);
