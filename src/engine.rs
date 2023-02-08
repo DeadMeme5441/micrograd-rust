@@ -1,7 +1,6 @@
 use core::fmt;
-use dyn_clonable::*;
-use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::f64::consts::E;
 use std::rc::Rc;
 
 use graphviz_rust::cmd::{CommandArg, Format};
@@ -68,12 +67,24 @@ impl Value {
 
     pub fn mul(&self, other: &Self) -> Self {
         let out: Value = Value {
-            data: self.data + other.data,
+            data: self.data * other.data,
             prev: Vec::from([
                 Rc::new(RefCell::new(self.clone())),
                 Rc::new(RefCell::new(other.clone())),
             ]),
             op: "*".to_string(),
+            label: "".to_string(),
+            grad: 0.0,
+        };
+
+        out
+    }
+
+    pub fn tanh(&self) -> Self {
+        let out: Value = Value {
+            data: ((E.powf(2.0 * self.data) - 1.0) / (E.powf(2.0 * self.data) + 1.0)),
+            prev: Vec::from([Rc::new(RefCell::new(self.clone()))]),
+            op: "tanh".to_string(),
             label: "".to_string(),
             grad: 0.0,
         };
@@ -88,20 +99,24 @@ pub fn back(root: Rc<RefCell<Value>>) {
     let op = &bind.op;
     let grad = bind.grad;
     if l != 0 {
-        let item1 = &mut bind.prev[0].borrow_mut();
-        let item2 = &mut bind.prev[1].borrow_mut();
         match op.as_str() {
             "+" => {
-                println!("Printing add");
-                println!("{:?}", grad);
+                let item1 = &mut bind.prev[0].borrow_mut();
+                let item2 = &mut bind.prev[1].borrow_mut();
+
                 item1.grad += 1.0 * grad;
                 item2.grad += 1.0 * grad;
             }
             "*" => {
-                println!("Printing multiply");
-                println!("{:?}", grad);
+                let item1 = &mut bind.prev[0].borrow_mut();
+                let item2 = &mut bind.prev[1].borrow_mut();
+
                 item1.grad += item2.data * grad;
                 item2.grad += item1.data * grad;
+            }
+            "tanh" => {
+                let item1 = &mut bind.prev[0].borrow_mut();
+                item1.grad += (1.0 - bind.data.powf(2.0)) * grad;
             }
             "" => {}
             _ => {}
@@ -153,11 +168,11 @@ impl NNode {
                 n.label.to_string() + "|" + &n.data.to_string() + "|" + &n.grad.to_string(),
             );
             dot.add_stmt(stmt!(
-                node!(uid;  attr!("label",esc &text), attr!("shape", "record"))
+                node!(esc uid;  attr!(esc "label",esc &text), attr!("shape", "record"))
             ));
 
             if n.op != "".to_string() {
-                let temp_uid: Id = id!(n.label.to_string() + &n.op.to_string());
+                let temp_uid: String = n.label.to_string() + &n.op.to_string();
                 dot.add_stmt(stmt!(node!(esc temp_uid;attr!("label",esc n.op))));
                 dot.add_stmt(stmt!(edge!(node_id!(esc temp_uid) => node_id!(esc uid))))
             }
@@ -165,9 +180,11 @@ impl NNode {
             for (val1, val2) in edges.iter() {
                 let n1 = val1.as_ref().borrow();
                 let n2 = val2.as_ref().borrow();
-                dot.add_stmt(stmt!(edge!(node_id!(esc n1.label.to_string()) => node_id!(esc n2.label.to_string() + &n2.op.to_string()))));
+                dot.add_stmt(stmt!(edge!(node_id!(esc r#n1.label.to_string()) => node_id!(esc r#n2.label.to_string() + &n2.op.to_string()))));
             }
         }
+
+        // println!("{:#?}", dot);
 
         let mut ctx = PrinterContext::default();
         let empty = exec(
@@ -178,6 +195,7 @@ impl NNode {
                 CommandArg::Output("output.svg".to_string()),
             ],
         );
+        println!("{:?}", empty);
     }
 
     fn build_topo(
